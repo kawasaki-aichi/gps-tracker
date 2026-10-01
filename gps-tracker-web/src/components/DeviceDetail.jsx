@@ -17,6 +17,7 @@ import ShareLinkPanel from './ShareLinkPanel';
 import Icon from './Icon';
 import { confirmDialog, alertDialog } from './Dialog';
 import { ageString, isStale, isFixStale } from '../colors';
+import { simQuotaView } from '../lib/simQuota';
 
 function useSection(loader, deviceId) {
   const [state, setState] = useState({ loading: true, data: null, error: null });
@@ -229,15 +230,13 @@ function SimBody({ sim, deviceId }) {
   if (!local.configured) return <Muted>1NCE API 자격증명 미설정</Muted>;
 
   const info = local.info || {};
-  const stats = local.usage?.stats || [];
-  const total = stats.find(r => r.date === 'TOTAL');
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const today = stats.find(r => r.date === todayKey);
-  const usedMb  = total ? parseFloat(total.data?.volume || '0') : 0;
-  const todayMb = today ? parseFloat(today.data?.volume || '0') : 0;
-  const quotaMb = info.current_quota || 0;
+  const view = simQuotaView(local);
+  const { usedMb, quotaMb } = view;
   const pct = quotaMb > 0 ? Math.min(100, (usedMb / quotaMb) * 100) : 0;
   const barColor = pct > 80 ? 'var(--danger)' : pct > 50 ? '#fbbf24' : 'var(--accent)';
+  const meta = view.source === 'quota'
+    ? `잔여 ${view.remainingMb == null ? '—' : view.remainingMb.toFixed(2)} MB`
+    : `오늘 ${(view.todayMb || 0).toFixed(2)} MB`;
 
   return (
     <>
@@ -246,7 +245,7 @@ function SimBody({ sim, deviceId }) {
           <div style={s.simUsed}>
             {usedMb.toFixed(1)} <span style={s.simUsedUnit}>/ {quotaMb} MB</span>
           </div>
-          <div style={s.simMeta}>오늘 {todayMb.toFixed(2)} MB · {info.status || '—'}</div>
+          <div style={s.simMeta}>{meta} · {info.status || '—'}</div>
         </div>
         <button onClick={handleRefresh} disabled={refreshing} style={s.simRefresh}
           title="1NCE 직접 호출로 즉시 갱신">
