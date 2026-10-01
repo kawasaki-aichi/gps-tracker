@@ -5,6 +5,7 @@ import { api, setTokens } from '../api';
 import Icon from './Icon';
 import { confirmDialog, alertDialog, promptDialog } from './Dialog';
 import { StatCard, StatCardGrid } from './shared/StatCard';
+import { simQuotaView } from '../lib/simQuota';
 
 const NCE_PORTAL = 'https://portal.1nce.com';
 
@@ -566,7 +567,7 @@ function OrderInfoModal({ info, onClose, onRefreshOrder, onRefreshSim }) {
   const { row, loading, data, error } = info;
   const order = data?.order || {};
   const sim   = data?.sim?.info || {};
-  const quota = data?.sim?.usage?.stats?.find(s => s.date === 'TOTAL');
+  const simView = simQuotaView(data?.sim);
 
   async function copy(text) {
     try { await navigator.clipboard.writeText(text); } catch {}
@@ -632,8 +633,8 @@ function OrderInfoModal({ info, onClose, onRefreshOrder, onRefreshSim }) {
               <KV k="ICCID" v={sim.iccid} mono />
               <KV k="상태" v={sim.status} />
               <KV k="IP" v={sim.ip_address || '-'} />
-              <KV k="현재 quota" v={sim.current_quota ? `${sim.current_quota} MB` : '-'} />
-              <KV k="누적 사용" v={quota ? `${parseFloat(quota.data?.volume || '0').toFixed(2)} MB` : '-'} />
+              <KV k="현재 quota" v={simView.quotaMb ? `${simView.quotaMb} MB` : (sim.current_quota ? `${sim.current_quota} MB` : '-')} />
+              <KV k="누적 사용" v={simView.hasUsed ? `${simView.usedMb.toFixed(2)} MB` : '-'} />
             </Section>
 
             {/* Invoice PDF 안내 */}

@@ -15,7 +15,9 @@ ESP32 SIM7080G 가 사용하는 1NCE eSIM 의 **잔량 조회 / 데이터 충전
 | A) Cognito 토큰 | `ONCE_API_TOKEN` | 1NCE 포털에서 발급. **1시간 만료** → 운영 불가. 디버그/일회성 용 |
 | B) OAuth2 client_credentials | `ONCE_API_CLIENT_ID` + `ONCE_API_CLIENT_SECRET` | **영구**. POST `/management-api/oauth/token` → `access_token`. 운영 모드 |
 
-요청은 `Bearer <access_token>` 헤더. Endpoint base: `https://api.1nce.com/management-api/v1`.
+요청은 `Bearer <access_token>` 헤더. SIM Management base: `https://api.1nce.com/management-api/v2` (v1 은 2026년 말 종료). OAuth 토큰 URL 은 그대로 `POST /management-api/oauth/token`.
+
+Order 조회(`GET /orders/{id}`)만 v1 을 유지한다. v2 API Explorer 는 Authorization + SIM Management 뿐이고 Order Management 는 v2 문서 세트에 없다.
 
 ---
 
@@ -82,6 +84,13 @@ loop {
 }
 ```
 
+`fetch_sim_usage()` 가 호출하는 1NCE 경로 (v2):
+
+- `GET /sims/{iccid}` — 상태, MSISDN, IP, `current_quota`
+- `GET /sims/{iccid}/quota/data` — `volume`(남은 MB, 음수 가능) / `total_volume`(현재 할당). 사용량 = `total_volume − volume`
+- `GET /sims/{iccid}/quota/sms` 는 호출하지 않음. 장치/관리자 UI 가 SMS 잔량을 표시하지 않는다.
+- v1 `GET /usage?start_dt=` 는 v2 에 없다. 일별 "오늘" 사용량도 더 이상 오지 않고, 화면은 잔여 MB 를 보여 준다. 워커가 갱신하기 전의 캐시는 기존 `usage.stats` 를 그대로 읽는다.
+
 읽는 곳:
 - 모바일/웹 `GET /api/v1/devices/:id/sim` — devices.sim_info_cache 우선
 - `POST /api/v1/devices/:id/sim/refresh` — 강제 라이브
@@ -98,7 +107,7 @@ ALTER TABLE sim_topup_requests
 `admin_order_info` 핸들러 ([sim_requests.rs](../gps-tracker-api/src/routes/sim_requests.rs)):
 
 1. `order_info IS NOT NULL` → DB 만 read, 1NCE 호출 0
-2. NULL 이면 `GET /orders/{id}` 1회 → DB 저장 → 이후 영구 캐시
+2. NULL 이면 `GET /v1/orders/{id}` 1회 → DB 저장 → 이후 영구 캐시 (Order Management 는 v2 미포함)
 3. `?refresh=1` → 강제 재조회 (보통 불필요 — order 는 불변)
 
 **왜 영구 캐시:** order_number, invoice_number, invoice_amount, order_date 는 발급 후 1NCE 측에서도 절대 안 바뀜. 한 번 받으면 끝.
@@ -129,7 +138,7 @@ GET /api/v1/admin/sim-requests/:id/order
     "sims": [...]
   },
   "order_cached_at": "2026-06-12T13:15:42Z",
-  "sim":  { "info": {...}, "usage": {...} },
+  "sim":  { "info": {...}, "quota": {...}, "used_mb": 64.21, "quota_mb": 500, "remaining_mb": 435.79 },
   "sim_cached_at":   "2026-06-12T13:00:00Z",
   "error": null
 }
